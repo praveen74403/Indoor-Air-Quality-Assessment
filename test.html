@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Sensor Data</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+
+    <style>
+        .chart-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+
+        .chart {
+            flex: 0 0 48%;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <h1>Indoor Air Quality Monitoring with Net-Zero Sensor Kit</h1>
+    <h2>Interactive Data Visualization</h2>
+    <h3>Praveen Govindarajan</h3>
+</div>
+<label for="startDate">Start Date:</label>
+<input type="text" id="startDate" placeholder="2024-01-01">
+<label for="endDate">End Date:</label>
+<input type="text" id="endDate" placeholder="Today">
+<button onclick="updateCharts()">Apply Filter</button>
+<div class="chart-container">
+    <div class="chart">
+        <canvas id="hcho_sensor" width="400" height="300"></canvas>
+    </div>
+    <div class="chart">
+        <canvas id="light_sensor" width="400" height="300"></canvas>
+    </div>
+    <div class="chart">
+        <canvas id="tvoc_sensor_co2" width="400" height="300"></canvas>
+    </div>
+    <div class="chart">
+        <canvas id="tvoc_sensor_rh" width="400" height="300"></canvas>
+    </div>
+    <div class="chart">
+        <canvas id="tvoc_sensor_temperature" width="400" height="300"></canvas>
+    </div>
+    <div class="chart">
+        <canvas id="tvoc_sensor_tvoc" width="400" height="300"></canvas>
+    </div>
+</div>
+<div>
+    This code creates an interactive data visualization dashboard for Net-Zero Sensor Kit data. It uses Chart.js to
+    display sensor data from a JSON file for various features like hcho_sensor, light_sensor, and others. The user can
+    select a start and end date, and the charts will update to show the sensor data for that time period. The data is
+    filtered and processed to show patterns over time, providing insights into the sensor readings.
+</div>+
+
+
+<script>
+    let currentDate = new Date();
+    let startDate = new Date(currentDate.getFullYear(), 0, 1);
+    let endDate = currentDate;
+    let deviceData = null;
+    let features = [
+        "hcho_sensor",
+        "light_sensor",
+        "tvoc_sensor_co2",
+        "tvoc_sensor_rh",
+        "tvoc_sensor_temperature",
+        "tvoc_sensor_tvoc",
+    ];
+    let featureColors = [
+        "black",
+        "orange",
+        "blue",
+        "green",
+        "red",
+        "brown",
+    ];
+
+    let thresholds = {
+        "hcho_sensor": {'ub': 4.2, 'lb': 3.8},
+        "light_sensor": {'ub': 350, 'lb': 200},
+        "tvoc_sensor_co2": {'ub': 750, 'lb': 250},
+        "tvoc_sensor_rh": {'ub': 70, 'lb': 50},
+        "tvoc_sensor_temperature": {'ub': 26, 'lb': 22},
+        "tvoc_sensor_tvoc": {'ub': 300, 'lb': 100},
+    };
+
+    // Convert user input to Unix timeStamp
+    function dateToUnixTimestamp(dateString) {
+        let date = new Date(dateString);
+        // Adjust date to Singapore time zone
+        date.setUTCHours(date.getUTCHours() + 8);
+        let unixTimestamp = Math.floor(date.getTime() / 1000);
+        return unixTimestamp;
+    }
+
+
+    // Convert Unix timeStamp to minutes Elapssed in a day
+    function secondsToMinutesOfDay(timestamp) {
+        let datetime = new Date(timestamp * 1000);
+        let minutesElapsed = datetime.getHours() * 60 + datetime.getMinutes();
+        return minutesElapsed;
+    }
+
+    // Filtering data baded on user date selection
+    function filterData(DATA, START_DATE, END_DATE) {
+        let filteredData = {};
+        let startDateSeconds = START_DATE;
+        let endDateSeconds = END_DATE;
+
+        Object.entries(DATA).forEach(([timestamp, sensor_data]) => {
+            const datetime = parseInt(timestamp);
+            if (datetime >= startDateSeconds && datetime <= endDateSeconds) {
+                Object.entries(sensor_data).forEach(([feature, value]) => {
+                    if (!filteredData[feature]) {
+                        filteredData[feature] = [];
+                    }
+                    filteredData[feature].push({
+                        x: secondsToMinutesOfDay(datetime), // Convert seconds to minutes elapsed
+                        y: value
+                    });
+                });
+            }
+        });
+        return filteredData;
+    }
+
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    fetch("new.json")
+        .then((response) => response.json())
+        .then((data) => {
+            deviceData = data["device_01"];
+
+            flatpickr("#startDate", {
+                dateFormat: "Y-m-d",
+                defaultDate: startDate,
+                onChange: function (selectedDates, dateStr, instance) {
+                    startDate = selectedDates[0];
+                    updateCharts();
+                }
+            });
+
+            flatpickr("#endDate", {
+                dateFormat: "Y-m-d",
+                defaultDate: endDate,
+                onChange: function (selectedDates, dateStr, instance) {
+                    endDate = selectedDates[0];
+                    updateCharts();
+                }
+            });
+
+            function updateCharts() {
+                features.forEach((feature, i) => {
+                    const ctx = document.getElementById(feature).getContext("2d");
+
+                    let withinThresholdCount = 0;
+                    let outsideThresholdCount = 0;
+
+                    let filteredData = filterData(deviceData, dateToUnixTimestamp(startDate), dateToUnixTimestamp(endDate));
+
+                    new Chart(ctx, {
+                        type: "scatter",
+                        data: {
+                            datasets: [{
+                                label: feature,
+                                data: filteredData[feature].map((point) => {
+                                    let color = featureColors[i];
+                                    let radius = 2.4;
+
+                                    if (point.y >= thresholds[feature].lb && point.y <= thresholds[feature].ub) {
+                                        withinThresholdCount++;
+                                        color = 'grey';
+                                        radius = 1.2;
+                                    } else {
+                                        outsideThresholdCount++;
+                                    }
+
+                                    return {
+                                        x: point.x,
+                                        y: point.y,
+                                        backgroundColor: color,
+                                        pointRadius: radius,
+                                    };
+                                }),
+                                borderColor: featureColors[i],
+                                fill: true,
+                                
+
+                            }, ],
+
+                        },
+
+                        options: {
+                            scales: {
+                                x: {
+                                    type: "linear",
+                                    title: {
+                                        display: true,
+                                        text: "Minutes Elapsed in a Day",
+                                    },
+                                    min: 0,
+                                    max: 1440,
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: "Value",
+                                    },
+                                },
+                            },
+                            plugins: {
+                                autocolors: false,
+                                title: {
+                                    display: true,
+                                    text: `${feature} Pattern over the Selected Dates`,
+                                },
+                                annotation: {
+                                    annotations: {
+                                        box1: {
+                                            type: 'box',
+                                            drawTime: 'beforeDraw',
+                                            xMin: 0,
+                                            xMax: 1440,
+                                            yMin: thresholds[feature].lb,
+                                            yMax: thresholds[feature].ub,
+                                            backgroundColor: 'rgba(255,26,104,0.2)',
+                                            label: {
+                                                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                                content: `Within Threshold: ${withinThresholdCount}, Outside Threshold: ${outsideThresholdCount}`,
+                                                enabled: true, // Initially enabled
+                                            },
+                                        },
+                                    },
+                                },
+                                tooltip: {
+                                    callbacks: {}
+                                },
+                            },
+                            interaction: {
+                                mode: "nearest",
+                                intersect: false,
+                            },
+                            tooltips: {
+                                enabled: false,
+                                mode: "nearest",
+                            },
+                            onClick: function (e) {
+                                let element = this.getElementAtEvent(e)[0];
+                                if (element) {
+                                    let annotation = this.options.plugins.annotation.annotations.box1;
+                                    annotation.label.enabled = !annotation.label.enabled;
+                                    this.update();
+                                }
+                            },
+                        },
+                    });
+                    console.log(data)
+                });
+            }
+
+
+            updateCharts();
+            // addThresholdLines(chart, feature, thresholds[feature].ub, thresholds[feature].lb);
+        });
+
+    console.log(withinThresholdCount)
+</script>
+</body>
+</html>
+
+
+//The dataset used has the data only for dates between 8 March 2024 to 11 April 20204.

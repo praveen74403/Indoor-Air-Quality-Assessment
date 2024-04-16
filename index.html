@@ -6,6 +6,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="path/to/chartjs/dist/chart.min.js"></script>
+  <!-- <script src="path/to/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"></script> -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js" integrity="sha512-Hn1w6YiiFw6p6S2lXv6yKeqTk0PLVzeCwWY9n32beuPjQ5HLcvz5l2QsP+KilEr1ws37rCTw3bZpvfvVIeTh0Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+
+
   <style>
     .chart-container {
       display: flex;
@@ -51,7 +57,8 @@
   </div>
   <div>
     This code creates an interactive data visualization dashboard for Net-Zero Sensor Kit data. It uses Chart.js to display sensor data from a JSON file for various features like hcho_sensor, light_sensor, and others. The user can select a start and end date, and the charts will update to show the sensor data for that time period. The data is filtered and processed to show patterns over time, providing insights into the sensor readings.
-</div>
+</div>+
+
 
   <script>
     let currentDate = new Date();
@@ -148,50 +155,55 @@ function filterData(DATA, START_DATE, END_DATE) {
       return filteredData;
     }
 
-    // add top and bottom threshold lines
-    function addThresholdLines(chart, feature, ub, lb) {
-    // Add upper bound threshold line
-    chart.options.plugins.annotation.annotations.push({
-        type: 'line',
-        mode: 'horizontal',
-        scaleID: 'y',
-        value: ub,
-        borderColor: 'red',
-        borderWidth: 1,
-        borderDash: [5, 5], // Optional: add a dashed line
-        label: {
-            enabled: false,
-            content: feature + ' UB',
-            backgroundColor: 'rgba(255, 0, 0, 0.5)',
-            color: 'white',
-            position: 'top',
-            padding: 4,
-            fontSize: 12
-        }
-    });
+//     // add top and bottom threshold lines
+//     function addThresholdLines(chart, feature, ub, lb) {
+//       features.forEach((feature) =>{
+//       this_chart = chart.getChart(feature)
+//     // Add upper bound threshold line
+//     this_chart.options.plugins.annotation.annotations.push({
+//         type: 'line',
+//         mode: 'horizontal',
+//         scaleID: 'y',
+//         value: ub,
+//         borderColor: 'red',
+//         borderWidth: 1,
+//         borderDash: [5, 5], // Optional: add a dashed line
+//         label: {
+//             enabled: false,
+//             content: feature + ' UB',
+//             backgroundColor: 'rgba(255, 0, 0, 0.5)',
+//             color: 'white',
+//             position: 'top',
+//             padding: 4,
+//             fontSize: 12
+//         }
+//     });
 
-    // Add lower bound threshold line
-    chart.options.plugins.annotation.annotations.push({
-        type: 'line',
-        mode: 'horizontal',
-        scaleID: 'y',
-        value: lb,
-        borderColor: 'green',
-        borderWidth: 1,
-        borderDash: [5, 5], // Optional: add a dashed line
-        label: {
-            enabled: false,
-            content: feature + ' LB',
-            backgroundColor: 'rgba(0, 255, 0, 0.5)',
-            color: 'white',
-            position: 'top',
-            padding: 4,
-            fontSize: 12
-        }
-    });
+//     // Add lower bound threshold line
+//     this_chart.options.plugins.annotation.annotations.push({
+//         type: 'line',
+//         mode: 'horizontal',
+//         scaleID: 'y',
+//         value: lb,
+//         borderColor: 'green',
+//         borderWidth: 1,
+//         borderDash: [5, 5], // Optional: add a dashed line
+//         label: {
+//             enabled: false,
+//             content: feature + ' LB',
+//             backgroundColor: 'rgba(0, 255, 0, 0.5)',
+//             color: 'white',
+//             position: 'top',
+//             padding: 4,
+//             fontSize: 12
+//         }
+      
+//     });
+  
 
-    chart.update();
-}
+//     chart.update();
+//   })
+// }
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -228,11 +240,35 @@ function filterData(DATA, START_DATE, END_DATE) {
     });
 
     let filteredData = filterData(deviceData, dateToUnixTimestamp(startDate), dateToUnixTimestamp(endDate));
-    console.log(dateToUnixTimestamp(startDate))
-    console.log(dateToUnixTimestamp(endDate))
-    
+         
+
     features.forEach((feature, i) => {
         const ctx = document.getElementById(feature).getContext("2d");
+
+
+         // Update dataset to make points within the threshold non-interactive, smaller, and grey
+         let updatedData = filteredData[feature].map((point) => {
+            let color = 'grey';
+            let radius = 3;
+            let hitRadius = 0;
+
+            if (point.y >= thresholds[feature].lb && point.y <= thresholds[feature].ub) {
+                color = featureColors[i]; // Keep original color for points outside the threshold
+                radius = 6; // Increase size for points outside the threshold
+                hitRadius = 5; // Enable interaction for points outside the threshold
+            }
+
+            return {
+                x: point.x,
+                y: point.y,
+                backgroundColor: color,
+                radius: radius,
+                hitRadius: hitRadius
+            };
+        });
+
+
+
 
         new Chart(ctx, {
             type: "scatter",
@@ -244,6 +280,7 @@ function filterData(DATA, START_DATE, END_DATE) {
                         backgroundColor: featureColors[i],
                         borderColor: featureColors[i],
                         fill: false,
+                        
                     },
                 ],
             },
@@ -266,12 +303,23 @@ function filterData(DATA, START_DATE, END_DATE) {
                     },
                 },
                 plugins: {
+                  autocolors: false, 
                 title: {
                     display: true,
                     text: `${feature} Pattern over the Selected Dates`,
                 },
                 annotation: {
-                    annotations: []
+                    annotations: {
+                      box1: {
+                        type: 'box',
+                        drawTime:'beforeDraw',
+                        xMin: 0,
+                        xMax: 1440, 
+                        yMin: thresholds[feature].lb, 
+                        yMax: thresholds[feature].ub,
+                        backgroundColor: 'rgba(255,26,104,0.2)'
+                      }
+                    }
                 },
                 tooltip: {
                     callbacks: {}
@@ -290,10 +338,12 @@ function filterData(DATA, START_DATE, END_DATE) {
           });
           
         }
+
                 
         updateCharts();
-        addThresholdLines(ctx, feature, thresholds[feature].ub, thresholds[feature].lb);
+        // addThresholdLines(chart, feature, thresholds[feature].ub, thresholds[feature].lb);
       });
+      
 
   </script>
 </body>
