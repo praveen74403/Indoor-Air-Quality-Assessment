@@ -216,15 +216,23 @@
         "tvoc_sensor_temperature",
         "tvoc_sensor_tvoc",
       ];
-      let featureColors = ["black", "orange", "blue", "green", "red", "brown"];
+      //let featureColors = ["black", "orange", "blue", "green", "red", "brown"];
+      let featureColors = {
+        hcho_sensor: "0, 0, 0",
+        light_sensor: "255, 165, 0",
+        tvoc_sensor_co2: "0, 0, 255",
+        tvoc_sensor_rh: "0, 128, 0",
+        tvoc_sensor_temperature: "255, 0, 0",
+        tvoc_sensor_tvoc: "165, 42, 42",
+      };
 
       let thresholds = {
-        hcho_sensor: { ub: 4.2, lb: 3.8, yMin: 3.5, yMax: 8 },
+        hcho_sensor: { ub: 4.2, lb: 3.8, yMin: 3.5, yMax: 5.5 },
         light_sensor: { ub: 350, lb: 200, yMin: 0, yMax: 800 },
         tvoc_sensor_co2: { ub: 750, lb: 250, yMin: 0, yMax: 1750 },
         tvoc_sensor_rh: { ub: 70, lb: 50, yMin: 0, yMax: 100 },
         tvoc_sensor_temperature: { ub: 26, lb: 22, yMin: 18, yMax: 35 },
-        tvoc_sensor_tvoc: { ub: 300, lb: 100, yMin: 0, yMax: 4000 },
+        tvoc_sensor_tvoc: { ub: 300, lb: 100, yMin: 0, yMax: 1000 },
       };
 
       // Convert user input to Unix timeStamp
@@ -242,6 +250,9 @@
         let minutesElapsed = datetime.getHours() * 60 + datetime.getMinutes();
         return minutesElapsed;
       }
+      function remapValue(value, minValue, maxValue) {
+        return ((value - minValue) * (0.9 - 0.1)) / (maxValue - minValue) + 0.1;
+      }
 
       // Filtering data baded on user date selection
       function filterData(DATA, START_DATE, END_DATE) {
@@ -256,9 +267,11 @@
               if (!filteredData[feature]) {
                 filteredData[feature] = [];
               }
+
               filteredData[feature].push({
                 x: secondsToMinutesOfDay(datetime), // Convert seconds to minutes elapsed
                 y: value,
+                alpha: remapValue(datetime, startDateSeconds, endDateSeconds),
               });
             });
           }
@@ -315,11 +328,13 @@
                 dateToUnixTimestamp(endDate)
               );
 
+              num_Observation = filteredData[feature].length;
+
               // create the color and radius array to custom color points based on threshold
               let colors = [];
               let radiuses = [];
+
               filteredData[feature].forEach((point) => {
-                let color, radius;
                 if (
                   point.y >= thresholds[feature].lb &&
                   point.y <= thresholds[feature].ub
@@ -329,12 +344,29 @@
                   radius = 1.2;
                 } else {
                   outsideThresholdCount++;
-                  color = "rgba(220,221,225,0.8)";
+                  color = "rgba(80,80,80,0.1)";
                   radius = 2.4;
                 }
+
                 colors.push(color);
                 radiuses.push(radius);
+
+                // // Determine the range of dates in the filtered data
+                // let minDate = Math.min(
+                //   ...filteredData[feature].map((point) => point.x)
+                // );
+                // let maxDate = Math.max(
+                //   ...filteredData[feature].map((point) => point.x)
+                // );
+                // console.log("maxDate", maxDate, "minDate", minDate);
+
+                // // Calculate the range of dates in days
+                // let dateRange = maxDate - minDate;
+                // // Calculate alpha based on the position of the data point within the date range
+                // let alpha = 1 - (point.x - minDate) / dateRange; // Inverse proportional to date
+                // alphas.push(alpha);
               });
+              // console.log(alphas);
               OutsideThresholdCount[feature] = outsideThresholdCount;
               WithinThresholdCount[feature] = withinThresholdCount;
 
@@ -359,7 +391,7 @@
                   xMax: 1440,
                   yMin: thresholds[feature].lb,
                   yMax: thresholds[feature].ub,
-                  backgroundColor: "rgba(64, 224, 208,0.2)",
+                  backgroundColor: "rgba(64, 224, 208, 0.2)",
                   label: {
                     backgroundColor: "rgba(0, 0, 0, 0.5)",
                     content: `Upper Bound: ${thresholds[feature].ub}, Lower Bound: ${thresholds[feature].lb}`,
@@ -382,7 +414,16 @@
                         x: point.x,
                         y: point.y,
                       })),
-                      backgroundColor: featureColors[i],
+
+                      backgroundColor: Array(num_Observation)
+                        .fill(featureColors[feature])
+                        .map((color, index) => {
+                          // console.log(
+                          //   index,
+                          //   filteredData[feature][index].alpha
+                          // );
+                          return `rgba(${color},${filteredData[feature][index].alpha})`;
+                        }),
                       pointRadius: radiuses,
                       borderColor: colors,
                       fill: false,
