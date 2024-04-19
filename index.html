@@ -219,12 +219,12 @@
       let featureColors = ["black", "orange", "blue", "green", "red", "brown"];
 
       let thresholds = {
-        hcho_sensor: { ub: 4.2, lb: 3.8 },
-        light_sensor: { ub: 350, lb: 200 },
-        tvoc_sensor_co2: { ub: 750, lb: 250 },
-        tvoc_sensor_rh: { ub: 70, lb: 50 },
-        tvoc_sensor_temperature: { ub: 26, lb: 22 },
-        tvoc_sensor_tvoc: { ub: 300, lb: 100 },
+        hcho_sensor: { ub: 4.2, lb: 3.8, yMin: 3.5, yMax: 8 },
+        light_sensor: { ub: 350, lb: 200, yMin: 0, yMax: 800 },
+        tvoc_sensor_co2: { ub: 750, lb: 250, yMin: 0, yMax: 1750 },
+        tvoc_sensor_rh: { ub: 70, lb: 50, yMin: 0, yMax: 100 },
+        tvoc_sensor_temperature: { ub: 26, lb: 22, yMin: 18, yMax: 35 },
+        tvoc_sensor_tvoc: { ub: 300, lb: 100, yMin: 0, yMax: 4000 },
       };
 
       // Convert user input to Unix timeStamp
@@ -395,16 +395,28 @@
                       type: "linear",
                       title: {
                         display: true,
-                        text: "Minutes Elapsed in a Day",
+                        text: "Hours of the Day",
                       },
                       min: 0,
                       max: 1440,
+                      ticks: {
+                        stepSize: 120, // Show ticks every 2 hours (2 hours * 60 minutes = 120 minutes)
+                        // Use a callback function to format the ticks as hours
+                        callback: function (value, index, values) {
+                          // Convert minutes to hours
+                          const hours = Math.floor(value / 60);
+                          // Format the hours as 0-23
+                          return hours % 24;
+                        },
+                      },
                     },
                     y: {
                       title: {
                         display: true,
                         text: "Value",
                       },
+                      min: thresholds[feature].yMin,
+                      max: thresholds[feature].yMax,
                     },
                   },
                   plugins: {
